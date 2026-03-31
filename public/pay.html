@@ -79,6 +79,24 @@
     @keyframes blink {
       50% { opacity: 0.4; }
     }
+
+    /* 🔥 BUTTON */
+    .btn {
+      margin-top: 20px;
+      padding: 10px 16px;
+      border: none;
+      border-radius: 8px;
+      background: #22c55e;
+      color: white;
+      font-weight: bold;
+      cursor: pointer;
+      transition: 0.2s;
+    }
+
+    .btn:hover {
+      background: #16a34a;
+    }
+
   </style>
 </head>
 <body>
@@ -205,6 +223,9 @@ if (!id || id === "undefined") {
         card.innerHTML = `
           <h2>⏰ Pembayaran Expired</h2>
           <p>Silakan buat donasi baru</p>
+          <button class="btn" onclick="window.location.href='/'">
+            💚 Donasi Baru
+          </button>
         `;
       }
 
