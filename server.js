@@ -13,12 +13,6 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
 
-const PORT = process.env.PORT || 3000;
-
-server.listen(PORT, () => {
-  console.log("🚀 Server jalan di port", PORT);
-});
-
 app.use(cors());
 app.use(bodyParser.json());
 app.use(express.static("public"));
@@ -190,8 +184,10 @@ app.get("/check/:id", (req, res) => {
 
 /* ========================= */
 
-server.listen(3000, () => {
-  console.log("🚀 Server jalan di http://localhost:3000");
+const PORT = process.env.PORT || 3000;
+
+server.listen(PORT, () => {
+  console.log("🚀 Server jalan di port", PORT);
 });
 
 /* ========================= */
