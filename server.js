@@ -157,6 +157,7 @@ async function checkMutasiLoop() {
 
   // 🔥 KIRIM KE OVERLAY
   io.emit("donation", d);
+  io.emit("dashboard_update");
 }
       }
     }
