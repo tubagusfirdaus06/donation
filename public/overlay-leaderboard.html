@@ -31,11 +31,28 @@
     .item {
       display: flex;
       justify-content: space-between;
+      align-items: center;
       padding: 8px 10px;
       border-radius: 8px;
       margin-bottom: 6px;
       background: rgba(255,255,255,0.05);
       transition: transform 0.4s ease, background 0.4s;
+    }
+
+    .left {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .rank {
+      font-weight: bold;
+      color: #facc15;
+    }
+
+    .crown {
+      font-size: 16px;
+      margin-right: 2px;
     }
 
     .top1 {
@@ -67,7 +84,7 @@
 <script>
 const socket = io();
 
-let currentMap = {}; // simpan element lama
+let currentMap = {};
 
 function format(num) {
   return Number(num).toLocaleString("id-ID");
@@ -79,16 +96,16 @@ async function load() {
 
   const container = document.getElementById("list");
 
-  // 🔥 STEP 1: simpan posisi lama
+  // 🔥 simpan posisi lama
   const firstPos = {};
   Object.values(currentMap).forEach(el => {
     firstPos[el.dataset.name] = el.getBoundingClientRect();
   });
 
-  // 🔥 STEP 2: render ulang tapi reuse element
   const newMap = {};
 
   data.forEach((d, i) => {
+
     let el = currentMap[d.name];
 
     if (!el) {
@@ -97,8 +114,15 @@ async function load() {
       el.dataset.name = d.name;
     }
 
+    // 👑 crown untuk top 1
+    const crown = i === 0 ? `<span class="crown">👑</span>` : "";
+
     el.innerHTML = `
-      <div>#${i+1} ${d.name}</div>
+      <div class="left">
+        ${crown}
+        <span class="rank">#${i+1}</span>
+        <span>${d.name}</span>
+      </div>
       <div class="amount">Rp ${format(d.total)}</div>
     `;
 
@@ -110,7 +134,7 @@ async function load() {
     newMap[d.name] = el;
   });
 
-  // 🔥 STEP 3: animasi FLIP
+  // 🔥 FLIP animation
   data.forEach(d => {
     const el = newMap[d.name];
 
