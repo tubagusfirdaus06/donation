@@ -1,45 +1,178 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Payment</title>
+  <title>Pembayaran</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: 'Segoe UI', sans-serif;
+      background: radial-gradient(circle at top, #1e293b, #0f172a);
+      color: white;
+
+      display: flex;
+      justify-content: center;
+      align-items: center;
+
+      min-height: 100vh;
+      padding: 20px;
+    }
+
+    .card {
+      width: 100%;
+      max-width: 380px;
+      text-align: center;
+
+      background: rgba(255,255,255,0.06);
+      backdrop-filter: blur(14px);
+
+      padding: 28px;
+      border-radius: 18px;
+
+      box-shadow: 
+        0 10px 40px rgba(0,0,0,0.4),
+        inset 0 0 0 1px rgba(255,255,255,0.05);
+    }
+
+    h2 {
+      margin: 0 0 15px;
+    }
+
+    .qr-box {
+      background: white;
+      padding: 15px;
+      border-radius: 12px;
+      display: inline-block;
+      margin: 15px 0;
+    }
+
+    img {
+      width: 250px;
+    }
+
+    .amount {
+      font-size: 20px;
+      font-weight: bold;
+      margin-top: 10px;
+    }
+
+    .status {
+      margin-top: 15px;
+      font-size: 14px;
+      opacity: 0.8;
+    }
+
+    .success {
+      color: #22c55e;
+      font-size: 18px;
+      margin-top: 20px;
+    }
+
+    .loading {
+      animation: blink 1s infinite;
+    }
+
+    @keyframes blink {
+      50% { opacity: 0.4; }
+    }
+  </style>
 </head>
 <body>
-  <h2>Scan QR</h2>
-  <img id="qr" width="300"><br>
-  <h3 id="amount"></h3>
 
-  <script>
+<div class="card" id="card">
+  <h2>📱 Scan QRIS</h2>
+
+  <div class="qr-box">
+    <img id="qr">
+  </div>
+
+  <div class="amount" id="amount"></div>
+
+  <div class="status loading" id="status">
+    Menunggu pembayaran...
+  </div>
+</div>
+
+<script>
 const id = new URLSearchParams(location.search).get("id");
 
+const card = document.getElementById("card");
+
 if (!id || id === "undefined") {
-  document.body.innerHTML = "<h2>ID tidak valid ❌</h2>";
+  card.innerHTML = "<h2>❌ ID tidak valid</h2>";
 } else {
 
   async function loadData() {
-    const res = await fetch("/donation/" + id);
-    const d = await res.json();
+    try {
+      const res = await fetch("/donation/" + id);
+      const d = await res.json();
 
-    if (!d || !d.qr) {
-      document.body.innerHTML = "<h2>QRIS belum tersedia ❌</h2>";
-      return;
+      if (!d || !d.qr) {
+        card.innerHTML = "<h2>❌ QRIS belum tersedia</h2>";
+        return;
+      }
+
+      document.getElementById("qr").src = d.qr;
+      document.getElementById("amount").innerText = "Rp " + d.amount_unique;
+
+    } catch {
+      card.innerHTML = "<h2>❌ Gagal load data</h2>";
     }
-
-    document.getElementById("qr").src = d.qr;
-    document.getElementById("amount").innerText = "Rp " + d.amount_unique;
   }
 
   loadData();
 
-  // 🔥 cek status tiap 3 detik
-  setInterval(async () => {
+ // 🔥 cek status
+const interval = setInterval(async () => {
+  try {
     const res = await fetch("/check/" + id);
     const d = await res.json();
 
     if (d.status === "paid") {
-      document.body.innerHTML = "<h2>✅ Pembayaran Berhasil</h2>";
+      clearInterval(interval);
+
+      card.innerHTML = `
+        <h2 class="success">✅ Pembayaran Berhasil</h2>
+        <p>Terima kasih sudah donasi 💚</p>
+        <p style="opacity:0.7;font-size:13px;">
+          Kembali dalam <b id="count">3</b> detik...
+        </p>
+      `;
+
+      let count = 3;
+      const el = document.getElementById("count");
+
+      const timer = setInterval(() => {
+        count--;
+        if (el) el.innerText = count;
+
+        if (count <= 0) {
+          clearInterval(timer);
+          window.location.href = "/";
+        }
+      }, 1000);
     }
-  }, 3000);
+
+    if (d.status === "expired") {
+      clearInterval(interval);
+
+      card.innerHTML = `
+        <h2>⏰ Pembayaran Expired</h2>
+        <p>Silakan buat donasi baru</p>
+      `;
+    }
+
+  } catch (err) {
+    console.error(err);
+  }
+}, 4000);
 }
 </script>
+
 </body>
 </html>
