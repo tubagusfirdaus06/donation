@@ -38,7 +38,6 @@
       transform: translateX(-50%) scale(1);
     }
 
-    /* 🌸 BACKGROUND */
     #box::before {
       content: "";
       position: absolute;
@@ -88,12 +87,22 @@
       opacity: 0.95;
     }
 
-    iframe {
+    /* 🔥 VIDEO RESPONSIVE */
+    .video-wrapper {
       width: 100%;
-      height: 220px;
+      max-height: 60vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      margin-top: 12px;
+    }
+
+    .video-wrapper iframe {
+      width: 100%;
+      height: 100%;
       border-radius: 12px;
       border: none;
-      margin-top: 12px;
+      aspect-ratio: 16/9;
     }
 
     .mascot {
@@ -143,6 +152,11 @@ window.onload = () => {
   if (typeof io === "undefined") {
     console.error("❌ socket.io gagal load!");
     return;
+  }
+
+  function formatRupiah(num) {
+    if (!num) return "0";
+    return Number(num).toLocaleString("id-ID");
   }
 
   window.socket = io();
@@ -196,17 +210,16 @@ window.onload = () => {
 
     document.getElementById("name").innerText = data.name;
     document.getElementById("message").innerText = data.message;
-    document.getElementById("amount").innerText = "Rp " + data.amount_original;
+    document.getElementById("amount").innerText =
+      "Rp " + formatRupiah(data.amount_original);
 
     mediaDiv.innerHTML = "";
     box.classList.add("show");
 
-    // 🔊 TTS
-    await speakNahida(`${data.name} donasi ${data.amount_original} rupiah. Pesan ${data.message}`);
+    await speakNahida(`${data.name} donasi ${formatRupiah(data.amount_original)} rupiah. Pesan ${data.message}`);
 
     await sleep(500);
 
-    // ❌ RULE
     if (!data.media_url || data.amount_original < 10000) {
       await sleep(3000);
       box.classList.remove("show");
@@ -214,25 +227,52 @@ window.onload = () => {
       processQueue();
       return;
     }
+let videoId = "";
 
-    // 🎬 VIDEO (INI TIDAK DIUBAH)
-    let videoId = "";
-    if (data.media_url.includes("youtu.be")) {
-      videoId = data.media_url.split("/").pop();
-    } else {
-      videoId = new URL(data.media_url).searchParams.get("v");
-    }
+try {
+  const url = data.media_url;
+
+  if (url.includes("youtu.be")) {
+    videoId = url.split("/").pop();
+  }
+
+  else if (url.includes("/shorts/")) {
+    videoId = url.split("/shorts/")[1].split("?")[0];
+  }
+
+  else if (url.includes("watch?v=")) {
+    videoId = new URL(url).searchParams.get("v");
+  }
+
+  else if (url.includes("/embed/")) {
+    videoId = url.split("/embed/")[1].split("?")[0];
+  }
+
+} catch (e) {
+  console.log("❌ gagal parse video id");
+}
 
     mediaDiv.innerHTML = `
-      <iframe 
-        id="ytplayer"
-        src="https://www.youtube.com/embed/${videoId}?enablejsapi=1&autoplay=1&mute=1&playsinline=1"
-        allow="autoplay; encrypted-media"
-        allowfullscreen>
-      </iframe>
+      <div class="video-wrapper">
+        <iframe 
+          id="ytplayer"
+          src="https://www.youtube.com/embed/${videoId}?enablejsapi=1&autoplay=1&mute=1&playsinline=1"
+          allow="autoplay; encrypted-media"
+          allowfullscreen>
+        </iframe>
+      </div>
     `;
 
-    // ▶️ PLAY
+    // 🔥 AUTO DETECT ORIENTATION
+    setTimeout(() => {
+      const iframe = document.getElementById("ytplayer");
+
+      const isPortrait = window.innerHeight > window.innerWidth;
+
+      iframe.style.aspectRatio = isPortrait ? "9/16" : "16/9";
+
+    }, 500);
+
     setTimeout(() => {
       const iframe = document.getElementById("ytplayer");
 
@@ -258,28 +298,24 @@ window.onload = () => {
 
     const duration = data.video_duration || Math.floor(data.amount_original / 200);
 
-console.log("⏱ Durasi video:", duration);
+    console.log("⏱ Durasi video:", duration);
 
-// ⏳ tunggu sesuai durasi
-await sleep(duration * 1000);
+    await sleep(duration * 1000);
 
-// 🔥 STOP VIDEO PAKSA
-const iframe = document.getElementById("ytplayer");
+    const iframe = document.getElementById("ytplayer");
 
-iframe?.contentWindow?.postMessage(JSON.stringify({
-  event: "command",
-  func: "stopVideo"
-}), "*");
+    iframe?.contentWindow?.postMessage(JSON.stringify({
+      event: "command",
+      func: "stopVideo"
+    }), "*");
 
-// delay sedikit biar stop kebaca
-await sleep(300);
+    await sleep(300);
 
-// 🧹 clean UI
-box.classList.remove("show");
-mediaDiv.innerHTML = "";
+    box.classList.remove("show");
+    mediaDiv.innerHTML = "";
 
-isPlaying = false;
-processQueue();
+    isPlaying = false;
+    processQueue();
   }
 
 };
