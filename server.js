@@ -333,3 +333,29 @@ io.on("connection", (socket) => {
     io.emit("donation", data);
   });
 });
+/* ========================== */
+app.get("/leaderboard", (req, res) => {
+
+  const now = new Date();
+  const currentMonth = now.getMonth();
+  const currentYear = now.getFullYear();
+
+  const monthly = donations.filter(d => {
+    const date = new Date(d.created_at);
+    return date.getMonth() === currentMonth &&
+           date.getFullYear() === currentYear;
+  });
+
+  const map = {};
+
+  monthly.forEach(d => {
+    map[d.name] = (map[d.name] || 0) + Number(d.amount_original || 0);
+  });
+
+  const leaderboard = Object.entries(map)
+    .map(([name, total]) => ({ name, total }))
+    .sort((a,b)=>b.total-a.total)
+    .slice(0,10);
+
+  res.json(leaderboard);
+});
