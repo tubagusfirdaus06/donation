@@ -2,46 +2,137 @@
 <html>
 <head>
   <title>Overlay</title>
+
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;700&display=swap" rel="stylesheet">
+
   <style>
     body {
       margin: 0;
       background: transparent;
       overflow: hidden;
-      font-family: sans-serif;
+      font-family: 'Poppins', sans-serif;
     }
 
     #box {
       position: absolute;
-      bottom: 50px;
-      left: 50px;
-      background: rgba(0,0,0,0.85);
-      padding: 20px;
-      border-radius: 12px;
+      bottom: 60px;
+      left: 50%;
+      transform: translateX(-50%) scale(0.9);
+
+      width: 650px;
+      padding: 20px 30px;
+
+      border-radius: 18px;
+      overflow: hidden;
+
       color: white;
-      width: 400px;
-      transform: translateX(-500px);
-      transition: 0.5s;
+
+      opacity: 0;
+      transition: 0.4s ease;
+
+      box-shadow: 0 10px 40px rgba(0,0,0,0.8);
     }
 
     #box.show {
-      transform: translateX(0);
+      opacity: 1;
+      transform: translateX(-50%) scale(1);
+    }
+
+    /* 🌸 BACKGROUND */
+    #box::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(
+        to right,
+        rgba(0,0,0,0.75),
+        rgba(0,0,0,0.55)
+      );
+      z-index: 1;
+      border-radius: 18px;
+    }
+
+    .bg {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      filter: brightness(0.7) blur(1px);
+      z-index: 0;
+    }
+
+    .content {
+      position: relative;
+      z-index: 2;
+      text-align: center;
+    }
+
+    .top {
+      font-size: 20px;
+      font-weight: 700;
+      margin-bottom: 6px;
+    }
+
+    .amount {
+      color: #ff7aa5;
+    }
+
+    .name {
+      color: #ff7aa5;
+    }
+
+    .message {
+      font-size: 16px;
+      margin-top: 5px;
+      opacity: 0.95;
     }
 
     iframe {
       width: 100%;
       height: 220px;
-      border-radius: 10px;
+      border-radius: 12px;
       border: none;
+      margin-top: 12px;
     }
+
+    .mascot {
+      position: absolute;
+      right: -30px;
+      bottom: -20px;
+      z-index: 2;
+    }
+
+    .mascot img {
+      width: 120px;
+      opacity: 0.9;
+    }
+
   </style>
 </head>
+
 <body>
 
 <div id="box">
-  <h2 id="name"></h2>
-  <p id="message"></p>
-  <b id="amount"></b>
-  <div id="media"></div>
+
+  <img src="https://ik.imagekit.io/avux/SaweriaOverlay/bg_sakura.jpg" class="bg">
+
+  <div class="content">
+    <div class="top">
+      <span class="amount" id="amount"></span>
+      Dari
+      <span class="name" id="name"></span>
+    </div>
+
+    <div class="message" id="message"></div>
+
+    <div id="media"></div>
+  </div>
+
+  <div class="mascot">
+    <img src="https://ik.imagekit.io/avux/SaweriaOverlay/sakura.png">
+  </div>
+
 </div>
 
 <script src="/socket.io/socket.io.js"></script>
@@ -61,40 +152,25 @@ window.onload = () => {
   let isPlaying = false;
   let currentAudio = null;
 
-  /* =========================
-     🔊 TTS NAHIDA
-  ========================= */
   function speakNahida(text) {
     return new Promise(async (resolve) => {
       try {
-        const apiURL = "https://elianacharoline-api.vercel.app/tools/text-to-speech";
-        const apikey = "ugaliuwt87t8wq98ysg98ay";
+        const url = "https://elianacharoline-api.vercel.app/tools/text-to-speech?apikey=ugaliuwt87t8wq98ysg98ay&model=nahida&text=" + encodeURIComponent(text);
 
-        const finalURL =
-          `${apiURL}?apikey=${apikey}&model=nahida&text=` +
-          encodeURIComponent(text);
-
-        const res = await fetch(finalURL);
+        const res = await fetch(url);
         const data = await res.json();
 
         if (!data.result?.length) return resolve();
 
-        if (currentAudio) {
-          currentAudio.pause();
-          currentAudio = null;
-        }
+        if (currentAudio) currentAudio.pause();
 
         const audio = new Audio(data.result[0].url);
         currentAudio = audio;
 
-        audio.volume = 1;
-        audio.onended = () => resolve();
-        audio.onerror = () => resolve();
-
+        audio.onended = resolve;
         await audio.play();
 
-      } catch (e) {
-        console.error(e);
+      } catch {
         resolve();
       }
     });
@@ -104,19 +180,10 @@ window.onload = () => {
     return new Promise(r => setTimeout(r, ms));
   }
 
-  /* =========================
-     📥 MASUK QUEUE
-  ========================= */
-
   socket.on("donation", (data) => {
-    console.log("📥 Masuk queue:", data.name);
     queue.push(data);
     processQueue();
   });
-
-  /* =========================
-     🎬 PROCESS QUEUE
-  ========================= */
 
   async function processQueue() {
     if (isPlaying) return;
@@ -129,7 +196,7 @@ window.onload = () => {
 
     document.getElementById("name").innerText = data.name;
     document.getElementById("message").innerText = data.message;
-    document.getElementById("amount").innerText = "Rp " + data.amount_unique;
+    document.getElementById("amount").innerText = "Rp " + data.amount_original;
 
     mediaDiv.innerHTML = "";
     box.classList.add("show");
@@ -139,9 +206,8 @@ window.onload = () => {
 
     await sleep(500);
 
-    // 🔥 RULE: minimal 10K
+    // ❌ RULE
     if (!data.media_url || data.amount_original < 10000) {
-      console.log("❌ Skip media (kurang dari 10K)");
       await sleep(3000);
       box.classList.remove("show");
       isPlaying = false;
@@ -149,7 +215,7 @@ window.onload = () => {
       return;
     }
 
-    // 🎬 VIDEO
+    // 🎬 VIDEO (INI TIDAK DIUBAH)
     let videoId = "";
     if (data.media_url.includes("youtu.be")) {
       videoId = data.media_url.split("/").pop();
@@ -190,21 +256,30 @@ window.onload = () => {
 
     }, 500);
 
-    // ⏱ DURASI
     const duration = data.video_duration || Math.floor(data.amount_original / 200);
 
-    console.log("⏱ Durasi:", duration);
+console.log("⏱ Durasi video:", duration);
 
-    await sleep(duration * 1000);
+// ⏳ tunggu sesuai durasi
+await sleep(duration * 1000);
 
-    // 🧹 CLEAN
-    box.classList.remove("show");
-    mediaDiv.innerHTML = "";
+// 🔥 STOP VIDEO PAKSA
+const iframe = document.getElementById("ytplayer");
 
-    isPlaying = false;
+iframe?.contentWindow?.postMessage(JSON.stringify({
+  event: "command",
+  func: "stopVideo"
+}), "*");
 
-    // 🔥 lanjut next queue
-    processQueue();
+// delay sedikit biar stop kebaca
+await sleep(300);
+
+// 🧹 clean UI
+box.classList.remove("show");
+mediaDiv.innerHTML = "";
+
+isPlaying = false;
+processQueue();
   }
 
 };
