@@ -106,28 +106,58 @@ async function checkMutasiLoop() {
 
         if (amount === Number(d.amount_unique)) {
 
-          d.status = "paid";
+  d.status = "paid";
 
-          // 🔥 RULE
-          if (d.amount_original < 10000) d.media_url = "";
-          d.video_duration = Math.floor(d.amount_original / 200);
+  // 🔥 RULE
+  if (d.amount_original < 10000) d.media_url = "";
+  d.video_duration = Math.floor(d.amount_original / 200);
 
-          // 🔥 SIMPAN KE FILE
-          donations.push(d);
+  // 🔥 TAMBAH TANGGAL & JAM
+  const now = new Date();
 
-          if (donations.length > 1000) {
-            donations = donations.slice(-1000);
-          }
+  d.tanggal = now.toLocaleDateString("id-ID", {
+    day: "numeric",
+    month: "long",
+    year: "numeric"
+  });
 
-          saveDonations();
+  d.jam = now.toLocaleTimeString("id-ID", {
+    hour: "2-digit",
+    minute: "2-digit"
+  });
 
-          // 🔥 HAPUS PENDING
-          pendingDonations = pendingDonations.filter(x => x.id !== d.id);
+  // 🔥 BACKUP (buat filter tetap jalan)
+  d.created_at = Date.now();
 
-          console.log("💰 PAID:", d.amount_unique);
+  // 🔥 SIMPAN KE FILE (clean object)
+  donations.push({
+    id: d.id,
+    name: d.name,
+    message: d.message,
+    media_url: d.media_url,
+    amount_original: d.amount_original,
+    amount_unique: d.amount_unique,
+    video_duration: d.video_duration,
+    tanggal: d.tanggal,
+    jam: d.jam,
+    created_at: d.created_at
+  });
 
-          io.emit("donation", d);
-        }
+  // 🔥 LIMIT HISTORY
+  if (donations.length > 1000) {
+    donations = donations.slice(-1000);
+  }
+
+  saveDonations();
+
+  // 🔥 HAPUS PENDING
+  pendingDonations = pendingDonations.filter(x => x.id !== d.id);
+
+  console.log("💰 PAID:", d.amount_unique);
+
+  // 🔥 KIRIM KE OVERLAY
+  io.emit("donation", d);
+}
       }
     }
 
