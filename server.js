@@ -4,7 +4,6 @@ const { Server } = require("socket.io");
 const bodyParser = require("body-parser");
 const cors = require("cors");
 
-// 🔥 FILE STORAGE
 const fs = require("fs");
 const path = require("path");
 const DB_FILE = path.join(__dirname, "donations.json");
@@ -21,27 +20,21 @@ const API_KEY = "ugaliuwt87t8wq98ysg98ay";
 const USERNAME = "elianacharostore";
 const TOKEN = "2402702:zd4IGiVAOpeRvFEnbqWlTmftHwSgausD";
 
-// 🔥 LOAD DATA
-let donations = [];
+/* ========================= */
+/* 🔥 STORAGE */
+
+let donations = []; // ONLY PAID
+let pendingDonations = []; // MEMORY ONLY
+
 if (fs.existsSync(DB_FILE)) {
   try {
-    const raw = fs.readFileSync(DB_FILE);
-    donations = JSON.parse(raw);
+    donations = JSON.parse(fs.readFileSync(DB_FILE));
     console.log("📂 Data loaded:", donations.length);
-  } catch (e) {
-    console.error("❌ Gagal load data:", e);
-  }
+  } catch {}
 }
 
-let checking = false;
-
-// 🔥 SAVE FUNCTION
 function saveDonations() {
-  try {
-    fs.writeFileSync(DB_FILE, JSON.stringify(donations, null, 2));
-  } catch (e) {
-    console.error("❌ Gagal save:", e);
-  }
+  fs.writeFileSync(DB_FILE, JSON.stringify(donations, null, 2));
 }
 
 /* ========================= */
@@ -56,22 +49,6 @@ function generateUniqueAmount(base) {
   return amount;
 }
 
-function formatDateTime(timestamp) {
-  const d = new Date(timestamp);
-
-  return {
-    date: d.toLocaleDateString("id-ID", {
-      day: "2-digit",
-      month: "long",
-      year: "numeric"
-    }),
-    time: d.toLocaleTimeString("id-ID", {
-      hour: "2-digit",
-      minute: "2-digit"
-    })
-  };
-}
-
 /* ========================= */
 
 async function createQRIS(amount) {
@@ -82,25 +59,30 @@ async function createQRIS(amount) {
   return { image: data?.imageqris?.url || "" };
 }
 
-/* ========================= */
-
 async function getMutasi() {
-  const url = `https://restapieliana.xyz/orderkuota/mutasiqr?apikey=${API_KEY}&username=${USERNAME}&token=${encodeURIComponent(TOKEN)}`;
-  const res = await fetch(url);
-  const json = await res.json();
-  return json.result || [];
+  try {
+    const url = `https://restapieliana.xyz/orderkuota/mutasiqr?apikey=${API_KEY}&username=${USERNAME}&token=${encodeURIComponent(TOKEN)}`;
+    const res = await fetch(url);
+    const json = await res.json();
+    return json.result || [];
+  } catch {
+    console.log("❌ error mutasi");
+    return [];
+  }
 }
 
 /* ========================= */
+/* 🔥 AUTO LOOP (SERVER SIDE) */
+
+let checking = false;
 
 async function checkMutasiLoop() {
   if (checking) return;
   checking = true;
 
   const interval = setInterval(async () => {
-    const pending = donations.filter(d => d.status === "pending");
 
-    if (pending.length === 0) {
+    if (pendingDonations.length === 0) {
       clearInterval(interval);
       checking = false;
       return;
@@ -113,30 +95,47 @@ async function checkMutasiLoop() {
 
       const amount = Number(String(trx.kredit).replace(/\./g, ""));
 
-      for (let d of pending) {
-        if (Number(d.amount_unique) === amount) {
+      for (let d of [...pendingDonations]) {
+
+        // ⏱ TIMEOUT 2 MENIT
+        if (Date.now() - d.created_at > 2 * 60 * 1000) {
+          console.log("⏰ expired:", d.id);
+          pendingDonations = pendingDonations.filter(x => x.id !== d.id);
+          continue;
+        }
+
+        if (amount === Number(d.amount_unique)) {
 
           d.status = "paid";
 
-          // 🔥 RULE 1
-          if (d.amount_original < 10000) {
-            d.media_url = "";
-          }
-
-          // 🔥 RULE 2
+          // 🔥 RULE
+          if (d.amount_original < 10000) d.media_url = "";
           d.video_duration = Math.floor(d.amount_original / 200);
 
-          saveDonations(); // 🔥 SAVE
+          // 🔥 SIMPAN KE FILE
+          donations.push(d);
+
+          if (donations.length > 1000) {
+            donations = donations.slice(-1000);
+          }
+
+          saveDonations();
+
+          // 🔥 HAPUS PENDING
+          pendingDonations = pendingDonations.filter(x => x.id !== d.id);
+
+          console.log("💰 PAID:", d.amount_unique);
 
           io.emit("donation", d);
-          break;
         }
       }
     }
+
   }, 5000);
 }
 
 /* ========================= */
+/* 🔥 DONATE */
 
 app.post("/donate", async (req, res) => {
   const { name, amount, message, media_url } = req.body;
@@ -156,14 +155,8 @@ app.post("/donate", async (req, res) => {
     created_at: Date.now()
   };
 
-  donations.push(donation);
-
-  // 🔥 OPTIONAL LIMIT
-  if (donations.length > 1000) {
-    donations = donations.slice(-1000);
-  }
-
-  saveDonations(); // 🔥 SAVE
+  // 🔥 SIMPAN KE MEMORY
+  pendingDonations.push(donation);
 
   checkMutasiLoop();
 
@@ -173,13 +166,43 @@ app.post("/donate", async (req, res) => {
 /* ========================= */
 
 app.get("/donation/:id", (req, res) => {
-  const d = donations.find(x => x.id == req.params.id);
+  const d =
+    pendingDonations.find(x => x.id == req.params.id) ||
+    donations.find(x => x.id == req.params.id);
+
   res.json(d || {});
 });
 
+/* ========================= */
+
 app.get("/check/:id", (req, res) => {
+  const id = req.params.id;
+
+  const pending = pendingDonations.find(x => x.id == id);
+  if (pending) return res.json({ status: "pending" });
+
+  const paid = donations.find(x => x.id == id);
+  if (paid) return res.json({ status: "paid" });
+
+  return res.json({ status: "expired" });
+});
+
+/* ========================= */
+
+app.get("/donations", (req, res) => {
+  res.json(donations.reverse());
+});
+
+/* ========================= */
+
+app.post("/replay/:id", (req, res) => {
   const d = donations.find(x => x.id == req.params.id);
-  res.json({ status: d?.status || "pending" });
+
+  if (!d) return res.status(404).json({ error: "not found" });
+
+  io.emit("donation", d);
+
+  res.json({ success: true });
 });
 
 /* ========================= */
@@ -196,34 +219,4 @@ io.on("connection", (socket) => {
   socket.on("donation", (data) => {
     io.emit("donation", data);
   });
-});
-
-/* ========================= */
-
-// 🔥 GET ALL DONATIONS
-app.get("/donations", (req, res) => {
-  const result = donations.map(d => {
-    const { date, time } = formatDateTime(d.created_at);
-
-    return {
-      ...d,
-      date,
-      time
-    };
-  });
-
-  res.json(result.reverse());
-});
-
-// 🔥 REPLAY
-app.post("/replay/:id", (req, res) => {
-  const d = donations.find(x => x.id == req.params.id);
-
-  if (!d) return res.status(404).json({ error: "not found" });
-
-  console.log("🔁 REPLAY:", d.name);
-
-  io.emit("donation", d);
-
-  res.json({ success: true });
 });
