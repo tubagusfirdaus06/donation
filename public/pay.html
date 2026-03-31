@@ -27,8 +27,7 @@
       backdrop-filter: blur(14px);
       padding: 28px;
       border-radius: 18px;
-      box-shadow: 0 10px 40px rgba(0,0,0,0.4),
-                  inset 0 0 0 1px rgba(255,255,255,0.05);
+      box-shadow: 0 10px 40px rgba(0,0,0,0.4);
     }
 
     h2 { margin: 0 0 15px; }
@@ -49,12 +48,6 @@
       margin-top: 10px;
     }
 
-    .status {
-      margin-top: 10px;
-      font-size: 14px;
-      opacity: 0.8;
-    }
-
     .timer {
       margin-top: 10px;
       font-size: 18px;
@@ -62,8 +55,23 @@
       color: #facc15;
     }
 
-    .danger {
-      color: #ef4444;
+    .danger { color: #ef4444; }
+
+    .btn {
+      margin-top: 15px;
+      padding: 10px;
+      width: 100%;
+      border: none;
+      border-radius: 8px;
+      background: #22c55e;
+      color: white;
+      font-weight: bold;
+      cursor: pointer;
+    }
+
+    .btn:disabled {
+      background: #555;
+      cursor: not-allowed;
     }
 
     .success {
@@ -71,34 +79,9 @@
       font-size: 18px;
       margin-top: 20px;
     }
-
-    .loading {
-      animation: blink 1s infinite;
-    }
-
-    @keyframes blink {
-      50% { opacity: 0.4; }
-    }
-
-    /* 🔥 BUTTON */
-    .btn {
-      margin-top: 20px;
-      padding: 10px 16px;
-      border: none;
-      border-radius: 8px;
-      background: #22c55e;
-      color: white;
-      font-weight: bold;
-      cursor: pointer;
-      transition: 0.2s;
-    }
-
-    .btn:hover {
-      background: #16a34a;
-    }
-
   </style>
 </head>
+
 <body>
 
 <div class="card" id="card">
@@ -112,9 +95,10 @@
 
   <div class="timer" id="timer">02:00</div>
 
-  <div class="status loading" id="status">
-    Menunggu pembayaran...
-  </div>
+  <!-- 🔥 BUTTON -->
+  <button class="btn" id="checkBtn" onclick="checkPayment()">
+    🔍 Cek Pembayaran
+  </button>
 </div>
 
 <script>
@@ -124,116 +108,119 @@ const card = document.getElementById("card");
 let createdAt = null;
 let countdownInterval = null;
 
-if (!id || id === "undefined") {
-  card.innerHTML = "<h2>❌ ID tidak valid</h2>";
-} else {
+function formatTime(sec) {
+  const m = String(Math.floor(sec / 60)).padStart(2, "0");
+  const s = String(sec % 60).padStart(2, "0");
+  return `${m}:${s}`;
+}
 
-  function formatTime(sec) {
-    const m = String(Math.floor(sec / 60)).padStart(2, "0");
-    const s = String(sec % 60).padStart(2, "0");
-    return `${m}:${s}`;
-  }
+function startTimer() {
+  countdownInterval = setInterval(() => {
+    const now = Date.now();
+    const diff = Math.floor((createdAt + 2*60*1000 - now) / 1000);
 
-  function startTimer() {
-    countdownInterval = setInterval(() => {
-      const now = Date.now();
-      const diff = Math.floor((createdAt + 2*60*1000 - now) / 1000);
+    const el = document.getElementById("timer");
 
-      const el = document.getElementById("timer");
+    if (!el) return;
 
-      if (!el) return;
+    if (diff <= 0) {
+      clearInterval(countdownInterval);
+      el.innerText = "00:00";
+      el.classList.add("danger");
 
-      if (diff <= 0) {
-        clearInterval(countdownInterval);
-        el.innerText = "00:00";
-        el.classList.add("danger");
-        return;
-      }
+      document.getElementById("checkBtn").disabled = true;
 
-      el.innerText = formatTime(diff);
-
-      if (diff <= 20) {
-        el.classList.add("danger");
-      }
-
-    }, 1000);
-  }
-
-  async function loadData() {
-    try {
-      const res = await fetch("/donation/" + id);
-      const d = await res.json();
-
-      if (!d || !d.qr) {
-        card.innerHTML = "<h2>❌ QRIS belum tersedia</h2>";
-        return;
-      }
-
-      createdAt = d.created_at;
-
-      document.getElementById("qr").src = d.qr;
-      document.getElementById("amount").innerText =
-        "Rp " + Number(d.amount_unique).toLocaleString("id-ID");
-
-      startTimer();
-
-    } catch {
-      card.innerHTML = "<h2>❌ Gagal load data</h2>";
+      card.innerHTML = `
+        <h2>⏰ Pembayaran Expired</h2>
+        <button class="btn" onclick="location.href='/'">💚 Donasi Baru</button>
+      `;
+      return;
     }
+
+    el.innerText = formatTime(diff);
+
+    if (diff <= 20) {
+      el.classList.add("danger");
+    }
+
+  }, 1000);
+}
+
+async function loadData() {
+  const res = await fetch("/donation/" + id);
+  const d = await res.json();
+
+  if (!d || !d.qr) {
+    card.innerHTML = "<h2>❌ QRIS tidak ditemukan</h2>";
+    return;
   }
 
-  loadData();
+  createdAt = d.created_at;
 
-  // 🔥 cek status
-  const interval = setInterval(async () => {
-    try {
-      const res = await fetch("/check/" + id);
-      const d = await res.json();
+  document.getElementById("qr").src = d.qr;
+  document.getElementById("amount").innerText =
+    "Rp " + Number(d.amount_unique).toLocaleString("id-ID");
 
-      if (d.status === "paid") {
-        clearInterval(interval);
-        clearInterval(countdownInterval);
+  startTimer();
+}
 
-        card.innerHTML = `
-          <h2 class="success">✅ Pembayaran Berhasil</h2>
-          <p>Terima kasih sudah donasi 💚</p>
-          <p style="opacity:0.7;font-size:13px;">
-            Kembali dalam <b id="count">3</b> detik...
-          </p>
-        `;
+loadData();
 
-        let count = 3;
-        const el = document.getElementById("count");
+/* ========================= */
+/* 🔥 CHECK BUTTON */
+async function checkPayment() {
 
-        const timer = setInterval(() => {
-          count--;
-          if (el) el.innerText = count;
+  const btn = document.getElementById("checkBtn");
+  btn.innerText = "⏳ Mengecek...";
+  btn.disabled = true;
 
-          if (count <= 0) {
-            clearInterval(timer);
-            window.location.href = "/";
-          }
-        }, 1000);
-      }
+  try {
+    const res = await fetch("/check/" + id);
+    const d = await res.json();
 
-      if (d.status === "expired") {
-        clearInterval(interval);
-        clearInterval(countdownInterval);
+    if (d.status === "paid") {
 
-        card.innerHTML = `
-          <h2>⏰ Pembayaran Expired</h2>
-          <p>Silakan buat donasi baru</p>
-          <button class="btn" onclick="window.location.href='/'">
-            💚 Donasi Baru
-          </button>
-        `;
-      }
+      clearInterval(countdownInterval);
 
-    } catch (err) {
-      console.error(err);
+      card.innerHTML = `
+        <h2 class="success">✅ Pembayaran Berhasil</h2>
+        <p>Terima kasih sudah donasi 💚</p>
+        <p>Kembali dalam <b id="count">3</b> detik...</p>
+      `;
+
+      let count = 3;
+      const el = document.getElementById("count");
+
+      const timer = setInterval(() => {
+        count--;
+        if (el) el.innerText = count;
+
+        if (count <= 0) {
+          clearInterval(timer);
+          location.href = "/";
+        }
+      }, 1000);
+
+    } else if (d.status === "pending") {
+
+      alert("❌ Pembayaran belum diterima!");
+
+      btn.innerText = "🔍 Cek Pembayaran";
+      btn.disabled = false;
+
+    } else {
+
+      alert("⏰ QRIS sudah expired!");
+
+      location.reload();
     }
-  }, 4000);
 
+  } catch (e) {
+    console.error(e);
+    alert("❌ Gagal cek pembayaran");
+    btn.innerText = "🔍 Cek Pembayaran";
+    btn.disabled = false;
+  }
 }
 </script>
 
