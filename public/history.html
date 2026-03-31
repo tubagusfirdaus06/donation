@@ -72,8 +72,8 @@ async function load() {
     el.innerHTML = `
       <div class="top">
         <div>
-          <b>${d.name}</b> - Rp ${d.amount_original}<br> kode unik - Rp ${d.amount_unique}<br>
-          <small>${d.date} • ${d.time} WIB</small>
+          <b>${d.name}</b> - Rp ${Number(d.amount_original).toLocaleString("id-ID")}<br> kode unik - Rp ${Number(d.amount_unique).toLocaleString("id-ID")}<br>
+          <small>${d.tanggal || "-"} • ${d.jam || "-"} WIB</small>
         </div>
         <button onclick="replay(${d.id})">▶ Replay</button>
       </div>
