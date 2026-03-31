@@ -262,6 +262,49 @@ app.get("/dashboard", (req, res) => {
     leaderboard
   });
 });
+
+// 📊 DASHBOARD DATA DETAIL
+app.get("/dashboard-detail", (req, res) => {
+
+  const now = new Date();
+  const currentMonth = now.getMonth();
+  const currentYear = now.getFullYear();
+
+  const monthly = donations.filter(d => {
+    const date = new Date(d.created_at);
+    return date.getMonth() === currentMonth &&
+           date.getFullYear() === currentYear;
+  });
+
+  // total
+  const total = monthly.reduce((sum, d) => sum + Number(d.amount_original || 0), 0);
+
+  // leaderboard
+  const map = {};
+  monthly.forEach(d => {
+    map[d.name] = (map[d.name] || 0) + Number(d.amount_original || 0);
+  });
+
+  const leaderboard = Object.entries(map)
+    .map(([name, total]) => ({ name, total }))
+    .sort((a,b)=>b.total-a.total)
+    .slice(0,10);
+
+  // 📈 grafik per hari
+  const dailyMap = {};
+
+  monthly.forEach(d => {
+    const day = new Date(d.created_at).getDate();
+    dailyMap[day] = (dailyMap[day] || 0) + Number(d.amount_original || 0);
+  });
+
+  const chart = Object.entries(dailyMap).map(([day, total]) => ({
+    day,
+    total
+  })).sort((a,b)=>a.day-b.day);
+
+  res.json({ total, leaderboard, chart });
+});
 /* ========================= */
 
 app.post("/replay/:id", (req, res) => {
