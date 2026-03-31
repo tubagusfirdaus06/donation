@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Dashboard Donasi</title>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <style>
+    body {
+      margin: 0;
+      font-family: 'Segoe UI', sans-serif;
+      background: #0f172a;
+      color: white;
+      padding: 20px;
+    }
+
+    h1 { margin-bottom: 20px; }
+
+    .box {
+      background: #1e293b;
+      padding: 20px;
+      border-radius: 12px;
+      margin-bottom: 15px;
+    }
+
+    .total {
+      font-size: 30px;
+      font-weight: bold;
+      color: #22c55e;
+    }
+
+    .btn {
+      display: inline-block;
+      margin: 5px;
+      padding: 10px 14px;
+      background: #22c55e;
+      border-radius: 8px;
+      cursor: pointer;
+      text-decoration: none;
+      color: white;
+      font-weight: bold;
+    }
+
+    .leaderboard-item {
+      display: flex;
+      justify-content: space-between;
+      padding: 8px 0;
+      border-bottom: 1px solid rgba(255,255,255,0.1);
+    }
+  </style>
+</head>
+
+<body>
+
+<h1>📊 Dashboard Donasi</h1>
+
+<div class="box">
+  <div>Total Donasi Bulan Ini</div>
+  <div class="total" id="total">Rp 0</div>
+</div>
+
+<div class="box">
+  <a href="/history.html" class="btn">📜 History</a>
+  <button class="btn" onclick="copyOverlay()">📋 Copy Overlay OBS</button>
+</div>
+
+<div class="box">
+  <h3>📈 Grafik Donasi (Harian)</h3>
+  <canvas id="chart"></canvas>
+</div>
+
+<div class="box">
+  <h3>🏆 Top Donator</h3>
+  <div id="leaderboard"></div>
+</div>
+
+<script>
+const socket = io();
+let chart;
+
+function formatRupiah(num) {
+  return Number(num).toLocaleString("id-ID");
+}
+
+async function load() {
+  const res = await fetch("/dashboard-detail");
+  const data = await res.json();
+
+  // total
+  document.getElementById("total").innerText =
+    "Rp " + formatRupiah(data.total);
+
+  // leaderboard
+  const lb = document.getElementById("leaderboard");
+  lb.innerHTML = "";
+
+  data.leaderboard.forEach((d, i) => {
+    const el = document.createElement("div");
+    el.className = "leaderboard-item";
+
+    el.innerHTML = `
+      <div>#${i+1} ${d.name}</div>
+      <div>Rp ${formatRupiah(d.total)}</div>
+    `;
+
+    lb.appendChild(el);
+  });
+
+  // chart
+  const labels = data.chart.map(x => x.day);
+  const values = data.chart.map(x => x.total);
+
+  if (chart) chart.destroy();
+
+  chart = new Chart(document.getElementById("chart"), {
+    type: "line",
+    data: {
+      labels: labels,
+      datasets: [{
+        label: "Donasi",
+        data: values,
+        fill: false,
+        tension: 0.3
+      }]
+    }
+  });
+}
+
+// realtime update
+socket.on("dashboard_update", () => {
+  load();
+});
+
+function copyOverlay() {
+  const url = location.origin + "/overlay.html";
+  navigator.clipboard.writeText(url);
+  alert("✅ Copied:\n" + url);
+}
+
+load();
+</script>
+
+</body>
+</html>
