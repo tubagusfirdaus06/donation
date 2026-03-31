@@ -14,7 +14,7 @@
     }
 
     .box {
-      width: 300px;
+      width: 320px;
       padding: 15px;
       border-radius: 12px;
       background: rgba(0,0,0,0.6);
@@ -22,28 +22,31 @@
     }
 
     .title {
-      font-weight: bold;
-      font-size: 18px;
-      margin-bottom: 10px;
       text-align: center;
+      font-weight: bold;
+      margin-bottom: 10px;
       color: #ff7aa5;
     }
 
     .item {
       display: flex;
       justify-content: space-between;
-      padding: 6px 0;
-      font-size: 14px;
-      border-bottom: 1px solid rgba(255,255,255,0.1);
+      padding: 8px 10px;
+      border-radius: 8px;
+      margin-bottom: 6px;
+      background: rgba(255,255,255,0.05);
+      transition: transform 0.4s ease, background 0.4s;
     }
 
-    .rank {
-      color: #facc15;
-      margin-right: 5px;
+    .top1 {
+      background: linear-gradient(90deg,#facc15,#f59e0b);
+      color: black;
+      font-weight: bold;
     }
 
-    .name {
-      flex: 1;
+    .updated {
+      box-shadow: 0 0 12px rgba(34,197,94,0.7);
+      transform: scale(1.05);
     }
 
     .amount {
@@ -64,6 +67,8 @@
 <script>
 const socket = io();
 
+let currentMap = {}; // simpan element lama
+
 function format(num) {
   return Number(num).toLocaleString("id-ID");
 }
@@ -72,25 +77,66 @@ async function load() {
   const res = await fetch("/leaderboard");
   const data = await res.json();
 
-  const list = document.getElementById("list");
-  list.innerHTML = "";
+  const container = document.getElementById("list");
+
+  // 🔥 STEP 1: simpan posisi lama
+  const firstPos = {};
+  Object.values(currentMap).forEach(el => {
+    firstPos[el.dataset.name] = el.getBoundingClientRect();
+  });
+
+  // 🔥 STEP 2: render ulang tapi reuse element
+  const newMap = {};
 
   data.forEach((d, i) => {
-    const el = document.createElement("div");
-    el.className = "item";
+    let el = currentMap[d.name];
+
+    if (!el) {
+      el = document.createElement("div");
+      el.className = "item";
+      el.dataset.name = d.name;
+    }
 
     el.innerHTML = `
-      <div class="name">
-        <span class="rank">#${i+1}</span> ${d.name}
-      </div>
+      <div>#${i+1} ${d.name}</div>
       <div class="amount">Rp ${format(d.total)}</div>
     `;
 
-    list.appendChild(el);
+    el.classList.remove("top1","updated");
+
+    if (i === 0) el.classList.add("top1");
+
+    container.appendChild(el);
+    newMap[d.name] = el;
   });
+
+  // 🔥 STEP 3: animasi FLIP
+  data.forEach(d => {
+    const el = newMap[d.name];
+
+    const first = firstPos[d.name];
+    const last = el.getBoundingClientRect();
+
+    if (first) {
+      const deltaY = first.top - last.top;
+
+      if (deltaY !== 0) {
+        el.style.transform = `translateY(${deltaY}px)`;
+
+        requestAnimationFrame(() => {
+          el.style.transform = "";
+          el.classList.add("updated");
+
+          setTimeout(() => el.classList.remove("updated"), 600);
+        });
+      }
+    }
+  });
+
+  currentMap = newMap;
 }
 
-// realtime update
+// 🔥 realtime
 socket.on("dashboard_update", load);
 
 load();
