@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Donate</title>
+</head>
+<body>
+  <h2>Donate</h2>
+
+  <form id="form">
+    <input name="name" placeholder="Nama" required><br><br>
+    <input name="amount" type="number" placeholder="Nominal" required><br><br>
+    <input name="media_url" placeholder="Link media"><br><br>
+    <textarea name="message" placeholder="Pesan"></textarea><br><br>
+    <button>Donate</button>
+  </form>
+
+ <script>
+const form = document.getElementById("form");
+
+form.onsubmit = async (e) => {
+  e.preventDefault();
+
+  const btn = form.querySelector("button");
+  btn.innerText = "Loading...";
+  btn.disabled = true;
+
+  const data = Object.fromEntries(new FormData(form));
+
+  try {
+    const res = await fetch("/donate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data)
+    });
+
+    const json = await res.json();
+
+    console.log("RESPONSE:", json);
+
+    if (!json.id || !json.qr) {
+      alert("QRIS gagal dibuat ❌");
+      btn.innerText = "Donate";
+      btn.disabled = false;
+      return;
+    }
+
+    location.href = "/pay.html?id=" + json.id;
+
+  } catch (err) {
+    alert("Server error ❌");
+    btn.innerText = "Donate";
+    btn.disabled = false;
+  }
+};
+</script>
+</body>
+</html>

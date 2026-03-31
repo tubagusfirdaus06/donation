@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Payment</title>
+</head>
+<body>
+  <h2>Scan QR</h2>
+  <img id="qr" width="300"><br>
+  <h3 id="amount"></h3>
+
+  <script>
+const id = new URLSearchParams(location.search).get("id");
+
+if (!id || id === "undefined") {
+  document.body.innerHTML = "<h2>ID tidak valid ❌</h2>";
+} else {
+
+  async function loadData() {
+    const res = await fetch("/donation/" + id);
+    const d = await res.json();
+
+    if (!d || !d.qr) {
+      document.body.innerHTML = "<h2>QRIS belum tersedia ❌</h2>";
+      return;
+    }
+
+    document.getElementById("qr").src = d.qr;
+    document.getElementById("amount").innerText = "Rp " + d.amount_unique;
+  }
+
+  loadData();
+
+  // 🔥 cek status tiap 3 detik
+  setInterval(async () => {
+    const res = await fetch("/check/" + id);
+    const d = await res.json();
+
+    if (d.status === "paid") {
+      document.body.innerHTML = "<h2>✅ Pembayaran Berhasil</h2>";
+    }
+  }, 3000);
+}
+</script>
+</body>
+</html>

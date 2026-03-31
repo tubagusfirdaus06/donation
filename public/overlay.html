@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Overlay</title>
+  <style>
+    body {
+      margin: 0;
+      background: transparent;
+      overflow: hidden;
+      font-family: sans-serif;
+    }
+
+    #box {
+      position: absolute;
+      bottom: 50px;
+      left: 50px;
+      background: rgba(0,0,0,0.85);
+      padding: 20px;
+      border-radius: 12px;
+      color: white;
+      width: 400px;
+      transform: translateX(-500px);
+      transition: 0.5s;
+    }
+
+    #box.show {
+      transform: translateX(0);
+    }
+
+    iframe {
+      width: 100%;
+      height: 220px;
+      border-radius: 10px;
+      border: none;
+    }
+  </style>
+</head>
+<body>
+
+<div id="box">
+  <h2 id="name"></h2>
+  <p id="message"></p>
+  <b id="amount"></b>
+  <div id="media"></div>
+</div>
+
+<script src="/socket.io/socket.io.js"></script>
+
+<script>
+window.onload = () => {
+
+  if (typeof io === "undefined") {
+    console.error("❌ socket.io gagal load!");
+    return;
+  }
+
+  window.socket = io();
+  const box = document.getElementById("box");
+
+  let queue = [];
+  let isPlaying = false;
+  let currentAudio = null;
+
+  /* =========================
+     🔊 TTS NAHIDA
+  ========================= */
+  function speakNahida(text) {
+    return new Promise(async (resolve) => {
+      try {
+        const apiURL = "https://elianacharoline-api.vercel.app/tools/text-to-speech";
+        const apikey = "ugaliuwt87t8wq98ysg98ay";
+
+        const finalURL =
+          `${apiURL}?apikey=${apikey}&model=nahida&text=` +
+          encodeURIComponent(text);
+
+        const res = await fetch(finalURL);
+        const data = await res.json();
+
+        if (!data.result?.length) return resolve();
+
+        if (currentAudio) {
+          currentAudio.pause();
+          currentAudio = null;
+        }
+
+        const audio = new Audio(data.result[0].url);
+        currentAudio = audio;
+
+        audio.volume = 1;
+        audio.onended = () => resolve();
+        audio.onerror = () => resolve();
+
+        await audio.play();
+
+      } catch (e) {
+        console.error(e);
+        resolve();
+      }
+    });
+  }
+
+  function sleep(ms) {
+    return new Promise(r => setTimeout(r, ms));
+  }
+
+  /* =========================
+     📥 MASUK QUEUE
+  ========================= */
+
+  socket.on("donation", (data) => {
+    console.log("📥 Masuk queue:", data.name);
+    queue.push(data);
+    processQueue();
+  });
+
+  /* =========================
+     🎬 PROCESS QUEUE
+  ========================= */
+
+  async function processQueue() {
+    if (isPlaying) return;
+    if (queue.length === 0) return;
+
+    isPlaying = true;
+
+    const data = queue.shift();
+    const mediaDiv = document.getElementById("media");
+
+    document.getElementById("name").innerText = data.name;
+    document.getElementById("message").innerText = data.message;
+    document.getElementById("amount").innerText = "Rp " + data.amount_unique;
+
+    mediaDiv.innerHTML = "";
+    box.classList.add("show");
+
+    // 🔊 TTS
+    await speakNahida(`${data.name} donasi ${data.amount_original} rupiah. Pesan ${data.message}`);
+
+    await sleep(500);
+
+    // 🔥 RULE: minimal 10K
+    if (!data.media_url || data.amount_original < 10000) {
+      console.log("❌ Skip media (kurang dari 10K)");
+      await sleep(3000);
+      box.classList.remove("show");
+      isPlaying = false;
+      processQueue();
+      return;
+    }
+
+    // 🎬 VIDEO
+    let videoId = "";
+    if (data.media_url.includes("youtu.be")) {
+      videoId = data.media_url.split("/").pop();
+    } else {
+      videoId = new URL(data.media_url).searchParams.get("v");
+    }
+
+    mediaDiv.innerHTML = `
+      <iframe 
+        id="ytplayer"
+        src="https://www.youtube.com/embed/${videoId}?enablejsapi=1&autoplay=1&mute=1&playsinline=1"
+        allow="autoplay; encrypted-media"
+        allowfullscreen>
+      </iframe>
+    `;
+
+    // ▶️ PLAY
+    setTimeout(() => {
+      const iframe = document.getElementById("ytplayer");
+
+      iframe?.contentWindow?.postMessage(JSON.stringify({
+        event: "command",
+        func: "playVideo"
+      }), "*");
+
+      setTimeout(() => {
+        iframe?.contentWindow?.postMessage(JSON.stringify({
+          event: "command",
+          func: "unMute"
+        }), "*");
+
+        iframe?.contentWindow?.postMessage(JSON.stringify({
+          event: "command",
+          func: "setVolume",
+          args: [100]
+        }), "*");
+      }, 1500);
+
+    }, 500);
+
+    // ⏱ DURASI
+    const duration = data.video_duration || Math.floor(data.amount_original / 200);
+
+    console.log("⏱ Durasi:", duration);
+
+    await sleep(duration * 1000);
+
+    // 🧹 CLEAN
+    box.classList.remove("show");
+    mediaDiv.innerHTML = "";
+
+    isPlaying = false;
+
+    // 🔥 lanjut next queue
+    processQueue();
+  }
+
+};
+</script>
+
+</body>
+</html>
