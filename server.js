@@ -223,6 +223,45 @@ app.get("/donations", (req, res) => {
   res.json(donations.reverse());
 });
 
+// 🔥 DASHBOARD DATA
+app.get("/dashboard", (req, res) => {
+
+  const now = new Date();
+  const currentMonth = now.getMonth();
+  const currentYear = now.getFullYear();
+
+  // filter bulan ini
+  const monthly = donations.filter(d => {
+    const date = new Date(d.created_at);
+    return date.getMonth() === currentMonth &&
+           date.getFullYear() === currentYear;
+  });
+
+  // total donasi bulan ini
+  const total = monthly.reduce((sum, d) => {
+    return sum + Number(d.amount_original || 0);
+  }, 0);
+
+  // leaderboard
+  const leaderboardMap = {};
+
+  monthly.forEach(d => {
+    if (!leaderboardMap[d.name]) {
+      leaderboardMap[d.name] = 0;
+    }
+    leaderboardMap[d.name] += Number(d.amount_original || 0);
+  });
+
+  const leaderboard = Object.entries(leaderboardMap)
+    .map(([name, total]) => ({ name, total }))
+    .sort((a, b) => b.total - a.total)
+    .slice(0, 10);
+
+  res.json({
+    total,
+    leaderboard
+  });
+});
 /* ========================= */
 
 app.post("/replay/:id", (req, res) => {
