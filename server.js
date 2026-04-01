@@ -20,11 +20,57 @@ const API_KEY = "ugaliuwt87t8wq98ysg98ay";
 const USERNAME = "elianacharostore";
 const TOKEN = "2402702:zd4IGiVAOpeRvFEnbqWlTmftHwSgausD";
 
+// ===============================
+// 🔥 HUB CONFIG (FIX NON BLOCKING)
+// ===============================
+const HUB_URL = "https://server.elianainteractive.com/api/notify";
+const HUB_TOKEN = "EI115256152";
+
+function sendToHub(d) {
+  try {
+
+    // 🔥 ANTI DOUBLE TRIGGER
+    if (d.already_sent_to_hub) return;
+
+    const payload = {
+      time: new Date().toISOString().slice(0, 19).replace("T", " "),
+      trx: String(d.id),
+      title: "Donasi Masuk",
+      user: d.name || "SESEORANG",
+      pesan: d.message || "",
+      amount: parseInt(d.amount_original)
+    };
+
+    if (!payload.trx || payload.amount <= 0) return;
+
+    fetch(HUB_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Hub-Token": HUB_TOKEN
+      },
+      body: JSON.stringify(payload)
+    })
+    .then(() => {
+      console.log("📡 HUB SENT:", payload.trx);
+
+      // 🔥 SET FLAG
+      d.already_sent_to_hub = true;
+    })
+    .catch(err => {
+      console.log("❌ HUB ERROR:", err.message);
+    });
+
+  } catch (err) {
+    console.log("❌ HUB CRASH:", err.message);
+  }
+}
+
 /* ========================= */
 /* 🔥 STORAGE */
 
-let donations = []; // ONLY PAID
-let pendingDonations = []; // MEMORY ONLY
+let donations = [];
+let pendingDonations = [];
 
 if (fs.existsSync(DB_FILE)) {
   try {
@@ -43,7 +89,7 @@ function generateUniqueAmount(base) {
   let unique;
   let amount;
   do {
-    unique = Math.floor(Math.random() * 900) + 100;
+    unique = Math.floor(Math.random() * 90) + 10; // 🔥 2 digit (10–99)
     amount = Number(base) + unique;
   } while (donations.some(d => d.amount_unique === amount));
   return amount;
@@ -72,7 +118,7 @@ async function getMutasi() {
 }
 
 /* ========================= */
-/* 🔥 AUTO LOOP (SERVER SIDE) */
+/* 🔥 AUTO LOOP */
 
 let checking = false;
 
@@ -97,7 +143,6 @@ async function checkMutasiLoop() {
 
       for (let d of [...pendingDonations]) {
 
-        // ⏱ TIMEOUT 2 MENIT
         if (Date.now() - d.created_at > 2 * 60 * 1000) {
           console.log("⏰ expired:", d.id);
           pendingDonations = pendingDonations.filter(x => x.id !== d.id);
@@ -106,59 +151,54 @@ async function checkMutasiLoop() {
 
         if (amount === Number(d.amount_unique)) {
 
-  d.status = "paid";
+          d.status = "paid";
 
-  // 🔥 RULE
-  if (d.amount_original < 10000) d.media_url = "";
-  d.video_duration = Math.floor(d.amount_original / 200);
+          if (d.amount_original < 10000) d.media_url = "";
+          d.video_duration = Math.floor(d.amount_original / 200);
 
-  // 🔥 TAMBAH TANGGAL & JAM
-  const now = new Date();
+          const now = new Date();
 
-  d.tanggal = now.toLocaleDateString("id-ID", {
-    day: "numeric",
-    month: "long",
-    year: "numeric"
-  });
+          d.tanggal = now.toLocaleDateString("id-ID", {
+            day: "numeric",
+            month: "long",
+            year: "numeric"
+          });
 
-  d.jam = now.toLocaleTimeString("id-ID", {
-    hour: "2-digit",
-    minute: "2-digit"
-  });
+          d.jam = now.toLocaleTimeString("id-ID", {
+            hour: "2-digit",
+            minute: "2-digit"
+          });
 
-  // 🔥 BACKUP (buat filter tetap jalan)
-  d.created_at = Date.now();
+          d.created_at = Date.now();
 
-  // 🔥 SIMPAN KE FILE (clean object)
-  donations.push({
-    id: d.id,
-    name: d.name,
-    message: d.message,
-    media_url: d.media_url,
-    amount_original: d.amount_original,
-    amount_unique: d.amount_unique,
-    video_duration: d.video_duration,
-    tanggal: d.tanggal,
-    jam: d.jam,
-    created_at: d.created_at
-  });
+          donations.push({
+            id: d.id,
+            name: d.name,
+            message: d.message,
+            media_url: d.media_url,
+            amount_original: d.amount_original,
+            amount_unique: d.amount_unique,
+            video_duration: d.video_duration,
+            tanggal: d.tanggal,
+            jam: d.jam,
+            created_at: d.created_at
+          });
 
-  // 🔥 LIMIT HISTORY
-  if (donations.length > 1000) {
-    donations = donations.slice(-1000);
-  }
+          if (donations.length > 1000) {
+            donations = donations.slice(-1000);
+          }
 
-  saveDonations();
+          saveDonations();
 
-  // 🔥 HAPUS PENDING
-  pendingDonations = pendingDonations.filter(x => x.id !== d.id);
+          pendingDonations = pendingDonations.filter(x => x.id !== d.id);
 
-  console.log("💰 PAID:", d.amount_unique);
+          console.log("💰 PAID:", d.amount_unique);
 
-  // 🔥 KIRIM KE OVERLAY
-  io.emit("donation", d);
-  io.emit("dashboard_update");
-}
+          setTimeout(() => sendToHub(d), 0);
+
+          io.emit("donation", d);
+          io.emit("dashboard_update");
+        }
       }
     }
 
@@ -186,12 +226,42 @@ app.post("/donate", async (req, res) => {
     created_at: Date.now()
   };
 
-  // 🔥 SIMPAN KE MEMORY
   pendingDonations.push(donation);
-
   checkMutasiLoop();
 
   res.json(donation);
+});
+
+/* ========================= */
+/* 🧪 TEST DONATE */
+
+app.post("/test-donate", (req, res) => {
+  const { name, amount, message } = req.body;
+
+  const d = {
+    id: Date.now(),
+    name: name || "TEST USER",
+    message: message || "Test donation 🚀",
+    media_url: "",
+    amount_original: Number(amount || 10000),
+    amount_unique: Number(amount || 10000),
+    video_duration: Math.floor((amount || 10000) / 200),
+    tanggal: new Date().toLocaleDateString("id-ID"),
+    jam: new Date().toLocaleTimeString("id-ID"),
+    created_at: Date.now()
+  };
+
+  donations.push(d);
+  saveDonations();
+
+  console.log("🧪 TEST DONATION:", d.amount_original);
+
+  setTimeout(() => sendToHub(d), 0);
+
+  io.emit("donation", d);
+  io.emit("dashboard_update");
+
+  res.json({ success: true, data: d });
 });
 
 /* ========================= */
@@ -231,19 +301,16 @@ app.get("/dashboard", (req, res) => {
   const currentMonth = now.getMonth();
   const currentYear = now.getFullYear();
 
-  // filter bulan ini
   const monthly = donations.filter(d => {
     const date = new Date(d.created_at);
     return date.getMonth() === currentMonth &&
            date.getFullYear() === currentYear;
   });
 
-  // total donasi bulan ini
   const total = monthly.reduce((sum, d) => {
     return sum + Number(d.amount_original || 0);
   }, 0);
 
-  // leaderboard
   const leaderboardMap = {};
 
   monthly.forEach(d => {
@@ -264,7 +331,7 @@ app.get("/dashboard", (req, res) => {
   });
 });
 
-// 📊 DASHBOARD DATA DETAIL
+// 🔥 DASHBOARD DETAIL
 app.get("/dashboard-detail", (req, res) => {
 
   const now = new Date();
@@ -277,10 +344,8 @@ app.get("/dashboard-detail", (req, res) => {
            date.getFullYear() === currentYear;
   });
 
-  // total
   const total = monthly.reduce((sum, d) => sum + Number(d.amount_original || 0), 0);
 
-  // leaderboard
   const map = {};
   monthly.forEach(d => {
     map[d.name] = (map[d.name] || 0) + Number(d.amount_original || 0);
@@ -291,21 +356,19 @@ app.get("/dashboard-detail", (req, res) => {
     .sort((a,b)=>b.total-a.total)
     .slice(0,10);
 
-  // 📈 grafik per hari
   const dailyMap = {};
-
   monthly.forEach(d => {
     const day = new Date(d.created_at).getDate();
     dailyMap[day] = (dailyMap[day] || 0) + Number(d.amount_original || 0);
   });
 
-  const chart = Object.entries(dailyMap).map(([day, total]) => ({
-    day,
-    total
-  })).sort((a,b)=>a.day-b.day);
+  const chart = Object.entries(dailyMap)
+    .map(([day, total]) => ({ day, total }))
+    .sort((a,b)=>a.day-b.day);
 
   res.json({ total, leaderboard, chart });
 });
+
 /* ========================= */
 
 app.post("/replay/:id", (req, res) => {
@@ -314,7 +377,6 @@ app.post("/replay/:id", (req, res) => {
   if (!d) return res.status(404).json({ error: "not found" });
 
   io.emit("donation", d);
-
   res.json({ success: true });
 });
 
@@ -326,14 +388,14 @@ server.listen(PORT, () => {
   console.log("🚀 Server jalan di port", PORT);
 });
 
-/* ========================= */
-
 io.on("connection", (socket) => {
   socket.on("donation", (data) => {
     io.emit("donation", data);
   });
 });
+
 /* ========================== */
+
 app.get("/leaderboard", (req, res) => {
 
   const now = new Date();
@@ -347,7 +409,6 @@ app.get("/leaderboard", (req, res) => {
   });
 
   const map = {};
-
   monthly.forEach(d => {
     map[d.name] = (map[d.name] || 0) + Number(d.amount_original || 0);
   });
