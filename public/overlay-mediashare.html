@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Overlay</title>
+<title>Overlay Media</title>
 
 <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;700&display=swap" rel="stylesheet">
 
@@ -14,23 +14,13 @@ body {
   font-family: 'Poppins', sans-serif;
 }
 
-/* 🔥 WRAPPER FULLSCREEN (FIX OBS CENTER) */
-#wrapper {
-  position: fixed;
-  inset: 0;
-
-  display: flex;
-  justify-content: center;
-  align-items: center;
-
-  pointer-events: none;
-}
-
-/* 🔥 BOX (RESPONSIVE SIZE) */
 #box {
-  width: 40vw;
-  max-width: 650px;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%) scale(0.6);
 
+  width: 650px;
   padding: 20px 30px;
 
   border-radius: 18px;
@@ -39,7 +29,6 @@ body {
   color: white;
 
   opacity: 0;
-  transform: scale(0.6);
 
   transition: 
     transform 0.5s cubic-bezier(.2,1.2,.3,1),
@@ -50,8 +39,7 @@ body {
 
 #box.show {
   opacity: 1;
-  transform: scale(1);
-
+  transform: translate(-50%, -50%) scale(1);
   animation: glowPulse 1.2s ease;
 }
 
@@ -99,6 +87,23 @@ body {
   opacity: 0.95;
 }
 
+.video-wrapper {
+  width: 100%;
+  max-height: 60vh;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin-top: 12px;
+}
+
+.video-wrapper iframe {
+  width: 100%;
+  height: 100%;
+  border-radius: 12px;
+  border: none;
+  aspect-ratio: 16/9;
+}
+
 .mascot {
   position: absolute;
   right: -30px;
@@ -135,32 +140,31 @@ body {
 
 <body>
 
-<!-- 🔥 WRAPPER -->
-<div id="wrapper">
+<div id="box">
 
-  <div id="box">
+  <img src="https://ik.imagekit.io/avux/SaweriaOverlay/bg_sakura.jpg" class="bg">
 
-    <img src="https://ik.imagekit.io/avux/SaweriaOverlay/bg_sakura.jpg" class="bg">
-
-    <div class="content">
-      <div class="top">
-        <span class="amount" id="amount"></span>
-        Dari
-        <span class="name" id="name"></span>
-      </div>
-
-      <div class="message" id="message"></div>
+  <div class="content">
+    <div class="top">
+      <span class="amount" id="amount"></span>
+      Dari
+      <span class="name" id="name"></span>
     </div>
 
-    <div class="mascot">
-      <img src="https://ik.imagekit.io/avux/SaweriaOverlay/sakura.png">
-    </div>
+    <div class="message" id="message"></div>
 
+    <div id="media"></div>
+  </div>
+
+  <div class="mascot">
+    <img src="https://ik.imagekit.io/avux/SaweriaOverlay/sakura.png">
   </div>
 
 </div>
 
 <script src="/socket.io/socket.io.js"></script>
+
+<script src="https://www.youtube.com/iframe_api"></script>
 
 <script>
 window.onload = () => {
@@ -171,6 +175,7 @@ window.onload = () => {
   let queue = [];
   let isPlaying = false;
   let currentAudio = null;
+  let player = null;
 
   function format(num){
     return Number(num || 0).toLocaleString("id-ID");
@@ -180,7 +185,6 @@ window.onload = () => {
     return new Promise(r=>setTimeout(r,ms));
   }
 
-  // 🔥 TTS NAHIDA
   function speakNahida(text) {
     return new Promise(async (resolve) => {
       try {
@@ -205,8 +209,7 @@ window.onload = () => {
     });
   }
 
-  // 🔥 LISTEN TANPA MEDIA
-  socket.on("donation", (d)=>{
+  socket.on("donation_media", (d)=>{
     queue.push(d);
     processQueue();
   });
@@ -218,19 +221,93 @@ window.onload = () => {
     isPlaying = true;
 
     const data = queue.shift();
+    const mediaDiv = document.getElementById("media");
 
     document.getElementById("name").innerText = data.name;
     document.getElementById("message").innerText = data.message;
     document.getElementById("amount").innerText =
       "Rp " + format(data.amount_original);
 
+    mediaDiv.innerHTML = "";
     box.classList.add("show");
 
+    // 🔥 TTS dulu
     await speakNahida(`${data.name} donasi ${format(data.amount_original)} rupiah. Pesan. ${data.message}`);
 
-    await sleep(3000);
+    await sleep(800);
 
+   let videoId = "";
+
+try {
+  const url = data.media_url;
+
+  if (url.includes("youtu.be")) {
+    videoId = url.split("/").pop().split("?")[0];
+  }
+  else if (url.includes("/shorts/")) {
+    videoId = url.split("/shorts/")[1].split("?")[0];
+  }
+  else if (url.includes("watch?v=")) {
+    videoId = new URL(url).searchParams.get("v");
+  }
+  else if (url.includes("/embed/")) {
+    videoId = url.split("/embed/")[1].split("?")[0];
+  }
+
+} catch (err) {
+  console.log("❌ ERROR PARSE VIDEO:", err);
+}
+
+    let ended = false;
+
+    mediaDiv.innerHTML = `
+      <div class="video-wrapper">
+        <div id="ytplayer"></div>
+      </div>
+    `;
+
+    // 🔥 INIT YT PLAYER (INI KUNCI)
+    player = new YT.Player("ytplayer", {
+      videoId: videoId,
+      playerVars: {
+        autoplay: 1,
+        mute: 1,
+        playsinline: 1
+      },
+      events: {
+        onReady: (e) => {
+          e.target.unMute();
+          e.target.setVolume(100);
+        },
+        onStateChange: (e) => {
+          if (e.data === 0) { // ended
+            ended = true;
+          }
+        }
+      }
+    });
+
+    // 🔥 fallback max duration
+  const donationDuration = Math.max(5, data.video_duration || 10);
+
+let elapsed = 0;
+
+while (true) {
+  if (ended) break; // video selesai duluan
+  if (elapsed >= donationDuration) break; // durasi donasi habis
+
+  await sleep(1000);
+  elapsed++;
+}
+    // 🔥 STOP PLAYER
+    try {
+      player.stopVideo();
+      player.destroy();
+    } catch {}
+
+    // 🔥 END OVERLAY
     box.classList.remove("show");
+    mediaDiv.innerHTML = "";
 
     isPlaying = false;
     processQueue();

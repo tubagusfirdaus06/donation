@@ -196,7 +196,11 @@ async function checkMutasiLoop() {
 
           setTimeout(() => sendToHub(d), 0);
 
-          io.emit("donation", d);
+          if (d.media_url) {
+  io.emit("donation_media", d);
+} else {
+  io.emit("donation", d);
+}
           io.emit("dashboard_update");
         }
       }
@@ -232,17 +236,18 @@ app.post("/donate", async (req, res) => {
   res.json(donation);
 });
 
-/* ========================= */
-/* 🧪 TEST DONATE */
+// =========================
+// 🧪 TEST DONATE (FIXED)
+// =========================
 
 app.post("/test-donate", (req, res) => {
-  const { name, amount, message } = req.body;
+  const { name, amount, message, media_url } = req.body; // 🔥 TAMBAH INI
 
   const d = {
     id: Date.now(),
     name: name || "TEST USER",
     message: message || "Test donation 🚀",
-    media_url: "",
+    media_url: media_url || "", // 🔥 FIX DI SINI
     amount_original: Number(amount || 10000),
     amount_unique: Number(amount || 10000),
     video_duration: Math.floor((amount || 10000) / 200),
@@ -258,7 +263,12 @@ app.post("/test-donate", (req, res) => {
 
   setTimeout(() => sendToHub(d), 0);
 
-  io.emit("donation", d);
+  if (d.media_url) {
+    io.emit("donation_media", d);
+  } else {
+    io.emit("donation", d);
+  }
+
   io.emit("dashboard_update");
 
   res.json({ success: true, data: d });
@@ -376,7 +386,11 @@ app.post("/replay/:id", (req, res) => {
 
   if (!d) return res.status(404).json({ error: "not found" });
 
+  if (d.media_url) {
+  io.emit("donation_media", d);
+} else {
   io.emit("donation", d);
+}
   res.json({ success: true });
 });
 

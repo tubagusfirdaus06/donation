@@ -1,85 +1,86 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Pembayaran</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta charset="UTF-8">
+<title>Pembayaran</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-  <style>
-    * { box-sizing: border-box; }
+<style>
+* { box-sizing: border-box; }
 
-    body {
-      margin: 0;
-      font-family: 'Segoe UI', sans-serif;
-      background: radial-gradient(circle at top, #1e293b, #0f172a);
-      color: white;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      min-height: 100vh;
-      padding: 20px;
-    }
+body {
+  margin: 0;
+  font-family: 'Segoe UI', sans-serif;
+  background: radial-gradient(circle at top, #1e293b, #0f172a);
+  color: white;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  padding: 20px;
+}
 
-    .card {
-      width: 100%;
-      max-width: 380px;
-      text-align: center;
-      background: rgba(255,255,255,0.06);
-      backdrop-filter: blur(14px);
-      padding: 28px;
-      border-radius: 18px;
-      box-shadow: 0 10px 40px rgba(0,0,0,0.4);
-    }
+.card {
+  width: 100%;
+  max-width: 380px;
+  text-align: center;
+  background: rgba(255,255,255,0.06);
+  backdrop-filter: blur(14px);
+  padding: 28px;
+  border-radius: 18px;
+  box-shadow: 0 10px 40px rgba(0,0,0,0.4);
+}
 
-    h2 { margin: 0 0 15px; }
+h2 { margin: 0 0 15px; }
 
-    .qr-box {
-      background: white;
-      padding: 15px;
-      border-radius: 12px;
-      display: inline-block;
-      margin: 15px 0;
-    }
+.qr-box {
+  background: white;
+  padding: 15px;
+  border-radius: 12px;
+  display: inline-block;
+  margin: 15px 0;
+}
 
-    img { width: 250px; }
+img { width: 250px; }
 
-    .amount {
-      font-size: 20px;
-      font-weight: bold;
-      margin-top: 10px;
-    }
+.amount {
+  font-size: 20px;
+  font-weight: bold;
+  margin-top: 10px;
+}
 
-    .timer {
-      margin-top: 10px;
-      font-size: 18px;
-      font-weight: bold;
-      color: #facc15;
-    }
+.timer {
+  margin-top: 10px;
+  font-size: 18px;
+  font-weight: bold;
+  color: #facc15;
+}
 
-    .danger { color: #ef4444; }
+.danger { color: #ef4444; }
 
-    .btn {
-      margin-top: 15px;
-      padding: 10px;
-      width: 100%;
-      border: none;
-      border-radius: 8px;
-      background: #22c55e;
-      color: white;
-      font-weight: bold;
-      cursor: pointer;
-    }
+.btn {
+  margin-top: 15px;
+  padding: 10px;
+  width: 100%;
+  border: none;
+  border-radius: 8px;
+  background: #22c55e;
+  color: white;
+  font-weight: bold;
+  cursor: pointer;
+}
 
-    .btn:disabled {
-      background: #555;
-      cursor: not-allowed;
-    }
+.btn:disabled {
+  background: #555;
+  cursor: not-allowed;
+}
 
-    .success {
-      color: #22c55e;
-      font-size: 18px;
-      margin-top: 20px;
-    }
-  </style>
+.success {
+  color: #22c55e;
+  font-size: 18px;
+  margin-top: 20px;
+}
+</style>
 </head>
 
 <body>
@@ -92,10 +93,11 @@
   </div>
 
   <div class="amount" id="amount"></div>
- <h2>QRIS Expired dalam ⬇️ </h2>
-  <div class="timer" id="timer">02:00</div>
+  <div class="note">
+    Qris Expired dalam ⏰
+  </div>
+  <div class="timer" id="timer">03:00</div>
 
-  <!-- 🔥 BUTTON -->
   <button class="btn" id="checkBtn" onclick="checkPayment()">
     🔍 Cek Pembayaran
   </button>
@@ -107,6 +109,10 @@ const card = document.getElementById("card");
 
 let createdAt = null;
 let countdownInterval = null;
+let autoCheckInterval = null;
+
+const EXPIRE_TIME = 3 * 60 * 1000; // 🔥 3 MENIT
+const AUTO_CHECK_INTERVAL = 15000; // 🔥 15 DETIK
 
 function formatTime(sec) {
   const m = String(Math.floor(sec / 60)).padStart(2, "0");
@@ -114,17 +120,23 @@ function formatTime(sec) {
   return `${m}:${s}`;
 }
 
+function stopAll() {
+  clearInterval(countdownInterval);
+  clearInterval(autoCheckInterval);
+}
+
 function startTimer() {
   countdownInterval = setInterval(() => {
     const now = Date.now();
-    const diff = Math.floor((createdAt + 2*60*1000 - now) / 1000);
+    const diff = Math.floor((createdAt + EXPIRE_TIME - now) / 1000);
 
     const el = document.getElementById("timer");
 
     if (!el) return;
 
     if (diff <= 0) {
-      clearInterval(countdownInterval);
+      stopAll();
+
       el.innerText = "00:00";
       el.classList.add("danger");
 
@@ -146,6 +158,13 @@ function startTimer() {
   }, 1000);
 }
 
+// 🔥 AUTO CHECK
+function startAutoCheck() {
+  autoCheckInterval = setInterval(() => {
+    checkPayment(true); // silent mode
+  }, AUTO_CHECK_INTERVAL);
+}
+
 async function loadData() {
   const res = await fetch("/donation/" + id);
   const d = await res.json();
@@ -162,17 +181,21 @@ async function loadData() {
     "Rp " + Number(d.amount_unique).toLocaleString("id-ID");
 
   startTimer();
+  startAutoCheck(); // 🔥 AUTO START
 }
 
 loadData();
 
 /* ========================= */
-/* 🔥 CHECK BUTTON */
-async function checkPayment() {
+/* 🔥 CHECK PAYMENT */
+async function checkPayment(silent = false) {
 
   const btn = document.getElementById("checkBtn");
-  btn.innerText = "⏳ Mengecek...";
-  btn.disabled = true;
+
+  if (!silent) {
+    btn.innerText = "⏳ Mengecek...";
+    btn.disabled = true;
+  }
 
   try {
     const res = await fetch("/check/" + id);
@@ -180,7 +203,7 @@ async function checkPayment() {
 
     if (d.status === "paid") {
 
-      clearInterval(countdownInterval);
+      stopAll();
 
       card.innerHTML = `
         <h2 class="success">✅ Pembayaran Berhasil</h2>
@@ -203,23 +226,30 @@ async function checkPayment() {
 
     } else if (d.status === "pending") {
 
-      alert("❌ Pembayaran belum diterima!");
-
-      btn.innerText = "🔍 Cek Pembayaran";
-      btn.disabled = false;
+      if (!silent) {
+        alert("❌ Pembayaran belum diterima!");
+        btn.innerText = "🔍 Cek Pembayaran";
+        btn.disabled = false;
+      }
 
     } else {
 
-      alert("⏰ QRIS sudah expired!");
+      stopAll();
 
-      location.reload();
+      if (!silent) {
+        alert("⏰ QRIS sudah expired!");
+        location.reload();
+      }
     }
 
   } catch (e) {
     console.error(e);
-    alert("❌ Gagal cek pembayaran");
-    btn.innerText = "🔍 Cek Pembayaran";
-    btn.disabled = false;
+
+    if (!silent) {
+      alert("❌ Gagal cek pembayaran");
+      btn.innerText = "🔍 Cek Pembayaran";
+      btn.disabled = false;
+    }
   }
 }
 </script>
